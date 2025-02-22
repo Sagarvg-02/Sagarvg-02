@@ -1,0 +1,166 @@
+import { Injectable } from '@angular/core';
+import { AngularFirestore } from '@angular/fire/compat/firestore';
+import { Observable } from 'rxjs';
+
+export interface Employee {
+  id?: string;
+  name: string;
+  position: string;
+  salary: number;
+}
+
+@Injectable({
+  providedIn: 'root',
+})
+export class EmployeeService {
+  private collectionName = 'employees';
+
+  constructor(private firestore: AngularFirestore) {}
+
+  // Get all employees (real-time updates)
+  getEmployees(): Observable<Employee[]> {
+    return this.firestore.collection<Employee>(this.collectionName).valueChanges({ idField: 'id' });
+  }
+
+  // Create a new employee
+  addEmployee(employee: Employee): Promise<any> {
+    return this.firestore.collection(this.collectionName).add(employee);
+  }
+
+  // Update employee
+  updateEmployee(id: string, employee: Employee): Promise<void> {
+    return this.firestore.collection(this.collectionName).doc(id).update(employee);
+  }
+
+  // Delete employee
+  deleteEmployee(id: string): Promise<void> {
+    return this.firestore.collection(this.collectionName).doc(id).delete();
+  }
+}
+import { Component, OnInit } from '@angular/core';
+import { MatDialog } from '@angular/material/dialog';
+import { EmployeeService, Employee } from '../services/employee.service';
+import { EmpDetailDialogComponent } from '../emp-detail-dialog/emp-detail-dialog.component';
+import { Observable } from 'rxjs';
+
+@Component({
+  selector: 'app-home',
+  templateUrl: './home.component.html',
+  styleUrls: ['./home.component.scss'],
+})
+export class HomeComponent implements OnInit {
+  employees$: Observable<Employee[]>;
+
+  displayedColumns: string[] = ['name', 'position', 'salary', 'actions'];
+
+  constructor(private empService: EmployeeService, private dialog: MatDialog) {}
+
+  ngOnInit(): void {
+    this.employees$ = this.empService.getEmployees(); // Auto-updates when Firestore changes
+  }
+
+  openDialog(employee?: Employee): void {
+    this.dialog.open(EmpDetailDialogComponent, {
+      width: '400px',
+      data: employee || null, // Pass employee if editing, otherwise null
+    });
+  }
+
+  deleteEmployee(id: string) {
+    if (confirm('Are you sure you want to delete this employee?')) {
+      this.empService.deleteEmployee(id);
+    }
+  }
+}
+<div class="container">
+  <button mat-raised-button color="primary" (click)="openDialog()">Add Employee</button>
+
+  <table mat-table [dataSource]="employees$ | async" class="mat-elevation-z8">
+    <ng-container matColumnDef="name">
+      <th mat-header-cell *matHeaderCellDef>Name</th>
+      <td mat-cell *matCellDef="let emp">{{ emp.name }}</td>
+    </ng-container>
+
+    <ng-container matColumnDef="position">
+      <th mat-header-cell *matHeaderCellDef>Position</th>
+      <td mat-cell *matCellDef="let emp">{{ emp.position }}</td>
+    </ng-container>
+
+    <ng-container matColumnDef="salary">
+      <th mat-header-cell *matHeaderCellDef>Salary</th>
+      <td mat-cell *matCellDef="let emp">{{ emp.salary | currency }}</td>
+    </ng-container>
+
+    <ng-container matColumnDef="actions">
+      <th mat-header-cell *matHeaderCellDef>Actions</th>
+      <td mat-cell *matCellDef="let emp">
+        <button mat-button color="accent" (click)="openDialog(emp)">Edit</button>
+        <button mat-button color="warn" (click)="deleteEmployee(emp.id)">Delete</button>
+      </td>
+    </ng-container>
+
+    <tr mat-header
+    import { Component, Inject } from '@angular/core';
+    import { FormBuilder, FormGroup, Validators } from '@angular/forms';
+    import { MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
+    import { EmployeeService, Employee } from '../services/employee.service';
+    
+    @Component({
+      selector: 'app-emp-detail-dialog',
+      templateUrl: './emp-detail-dialog.component.html',
+      styleUrls: ['./emp-detail-dialog.component.scss'],
+    })
+    export class EmpDetailDialogComponent {
+      empForm: FormGroup;
+      isEdit: boolean = false;
+    
+      constructor(
+        private fb: FormBuilder,
+        private empService: EmployeeService,
+        private dialogRef: MatDialogRef<EmpDetailDialogComponent>,
+        @Inject(MAT_DIALOG_DATA) public data: Employee
+      ) {
+        this.isEdit = !!data; // Check if editing
+        this.empForm = this.fb.group({
+          name: [data?.name || '', Validators.required],
+          position: [data?.position || '', Validators.required],
+          salary: [data?.salary || '', [Validators.required, Validators.min(1000)]],
+        });
+      }
+    
+      save() {
+        if (this.empForm.valid) {
+          const employeeData = this.empForm.value;
+    
+          if (this.isEdit && this.data.id) {
+            this.empService.updateEmployee(this.data.id, employeeData).then(() => this.dialogRef.close());
+          } else {
+            this.empService.addEmployee(employeeData).then(() => this.dialogRef.close());
+          }
+        }
+      }
+    }
+    <h2 mat-dialog-title>{{ isEdit ? 'Edit Employee' : 'Add Employee' }}</h2>
+
+    <form [formGroup]="empForm">
+      <mat-form-field class="full-width">
+        <mat-label>Name</mat-label>
+        <input matInput formControlName="name" required />
+      </mat-form-field>
+    
+      <mat-form-field class="full-width">
+        <mat-label>Position</mat-label>
+        <input matInput formControlName="position" required />
+      </mat-form-field>
+    
+      <mat-form-field class="full-width">
+        <mat-label>Salary</mat-label>
+        <input matInput type="number" formControlName="salary" required />
+      </mat-form-field>
+    
+      <div class="dialog-actions">
+        <button mat-button (click)="dialogRef.close()">Cancel</button>
+        <button mat-raised-button color="primary" (click)="save()" [disabled]="empForm.invalid">Save</button>
+      </div>
+    </form>
+        
